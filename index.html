@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brew Log</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#eceff0;--surf:#fff;--ink:#1c2a26;--mute:#5d6b66;--line:#cfd7d4;--acc:#b9780c;--hop:#4f7a33;--on:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a17;--surf:#1b2622;--ink:#e6ece9;--mute:#9aaba4;--line:#2f3d38;--acc:#e0a030;--hop:#8fba6a;--on:#121a17;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a17;--surf:#1b2622;--ink:#e6ece9;--mute:#9aaba4;--line:#2f3d38;--acc:#e0a030;--hop:#8fba6a;--on:#121a17;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Libre Franklin",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:2rem;font-weight:800;margin:16px 0 4px;letter-spacing:-.02em}
+h2{font-size:1.1rem;font-weight:600;margin:28px 0 10px}
+.sub{color:var(--mute);margin:0 0 20px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+button{font:inherit;font-weight:600;border:0;border-radius:6px;padding:10px 16px;background:var(--acc);color:var(--on);cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.del{background:transparent;color:#b3412f;padding:6px 8px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--hop);outline-offset:2px}
+.item{display:block;width:100%;text-align:left;background:var(--surf);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:14px;margin-bottom:8px;font-weight:400}
+.item b{font-weight:600;font-size:1.05rem}
+.item span{color:var(--mute);display:block;font-size:.9rem}
+.abv{float:right;color:var(--hop);font-weight:800;font-size:1.3rem;font-style:normal}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .full{grid-column:1/-1}
+label{font-size:.85rem;color:var(--mute);display:block}
+input,textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--surf);border:1px solid var(--line);border-radius:6px;padding:9px;margin-top:3px}
+textarea{min-height:90px;resize:vertical}
+.big{background:var(--surf);border:1px solid var(--line);border-left:5px solid var(--hop);border-radius:6px;padding:12px 16px;margin:16px 0}
+.big strong{font-size:2.2rem;font-weight:800;color:var(--hop)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}
+th{color:var(--mute);font-weight:600}
+td input.c{margin:0;padding:6px;min-width:64px}
+td:first-child input.c{min-width:130px}
+svg{width:100%;height:auto;display:block;background:var(--surf);border:1px solid var(--line);border-radius:6px}
+.empty{color:var(--mute);padding:20px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:12px}
+.stats div{background:var(--surf);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.stats span{display:block;font-size:.8rem;color:var(--mute)}
+.stats b{font-size:1.4rem;font-weight:800;color:var(--hop)}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+var KEY="brewlog.v1",S={recipes:[],batches:[]},tab="b",sel=null,bk=false;
+try{var raw=JSON.parse(localStorage.getItem(KEY)||"null");if(Array.isArray(raw))S.batches=raw;else if(raw&&raw.batches){S=raw;S.recipes=S.recipes||[]}}catch(e){}
+function norm(x){x.ferm=x.ferm||[];x.hops=x.hops||[];x.yeast=Array.isArray(x.yeast)?x.yeast:(x.yeast?[{n:x.yeast,amt:"",att:x.att||"",temp:""}]:[]);if(x.eff==null)x.eff=72;if(x.boil==null)x.boil=60;x.log=x.log||[];x.mash=x.mash||[];return x}
+function normAll(){S.recipes.concat(S.batches).forEach(norm);S.units=S.units==="imperial"?"imperial":"metric";S.equip=S.equip||[]}normAll();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function $(i){return document.getElementById(i)}
+function num(v){return parseFloat(v)||0}
+function today(){return new Date().toISOString().slice(0,10)}
+function C(){return tab==="r"?S.recipes:S.batches}
+function im(){return S.units==="imperial"}
+var UF={vol:[1,.264172,"L","gal"],kg:[1,2.20462,"kg","lb"],g:[1,.035274,"g","oz"]};
+function uf(k){return UF[k][im()?1:0]}
+function ul(k){return UF[k][im()?3:2]}
+function dv(k,v){return v===""||v==null?"":+(num(v)*uf(k)).toFixed(3)}
+function sv(k,v){return v===""?"":num(v)/uf(k)}
+function tdisp(c){return c===""||c==null?"":(im()?(num(c)*9/5+32).toFixed(1):esc(c))}
+function tsave(v){return v===""?"":(im()?((num(v)-32)*5/9).toFixed(1):v)}
+function vfield(){var b=get();return'<div><label>Batch volume ('+ul("vol")+')<input type="number" step="any" inputmode="decimal" value="'+dv("vol",b.vol)+'" onchange="upd(\'vol\',sv(\'vol\',this.value))"></label></div>'}
+function get(){return C().filter(function(x){return x.id===sel})[0]}
+function abv(b){var o=parseFloat(b.og),f=parseFloat(b.fg);return o>1&&f>0&&o>=f?((o-f)*131.25).toFixed(1):null}
+function att(b){var a=b.yeast.map(function(y){return num(y.att)}).filter(Boolean);return a.length?a.reduce(function(p,q){return p+q},0)/a.length:75}
+
+function calc(b){var V=num(b.vol);if(!V)return null;var pts=0,mcu=0,ibu=0;
+b.ferm.forEach(function(x){var k=num(x.kg);pts+=k*num(x.ppg)*8.3454/V*num(b.eff)/100;mcu+=k*2.2046*num(x.lov)/(V*.264172)});
+var og=1+pts/1000,fg=1+(og-1)*(1-att(b)/100);
+b.hops.forEach(function(x){var u=1.65*Math.pow(.000125,og-1)*(1-Math.exp(-.04*num(x.min)))/4.15;ibu+=num(x.aa)/100*num(x.g)*1000/V*u});
+return{og:og,fg:fg,abv:(og-fg)*131.25,ibu:ibu,srm:mcu?1.4922*Math.pow(mcu,.6859):0}}
+function stats(b){var c=calc(b);if(!c)return'<p class="empty">Enter a batch volume to see estimates.</p>';
+var q=eqOf(b),a=[["Est. OG",c.og.toFixed(3)],["Est. FG",c.fg.toFixed(3)],["Est. ABV",c.abv.toFixed(1)+"%"],["IBU",Math.round(c.ibu)],["SRM",c.srm.toFixed(1)]];if(q){var g=b.ferm.reduce(function(s,x){return s+num(x.kg)},0),pb=num(b.vol)+num(q.trub)+num(q.boiloff)*num(b.boil)/60;a.push(["Pre-boil",+(pb*uf("vol")).toFixed(1)+" "+ul("vol")],["Total water",+((pb+g*1.04+num(q.dead))*uf("vol")).toFixed(1)+" "+ul("vol")])}return a.map(function(x){return'<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join("")}
+
+function tabs(){return'<div class="tabs">'+[["r","Recipes"],["b","Batches"],["e","Equipment"]].map(function(t){return'<button class="'+(tab===t[0]?'':'ghost')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'}).join("")+'<button class="ghost" style="margin-left:auto" onclick="S.units=im()?\'metric\':\'imperial\';save();render()">'+(im()?"Imperial":"Metric")+'</button></div>'}
+function go(t){tab=t;sel=null;render()}
+
+function list(){var r=tab==="r",L=C();
+var h=tabs()+'<h1>'+(r?"Recipes":"Batches")+'</h1><p class="sub">'+(r?"Your recipe library. Brew a recipe to start a batch.":"Each batch keeps its own recipe copy, readings and notes. Saved in this browser.")+'</p>';
+h+='<div class="row"><button onclick="add()">'+(r?"New recipe":"New batch")+'</button><button class="ghost" onclick="bk=!bk;render()">Backup</button></div>';
+if(bk)h+='<h2>Backup</h2><label>Copy this text to save everything. Paste saved text here and press Restore to load it.</label><textarea id="bk">'+esc(JSON.stringify(S))+'</textarea><div class="row" style="margin-top:8px"><button class="ghost" onclick="restore()">Restore</button></div>';
+h+='<h2>'+(r?"Library":"All batches")+'</h2>';
+if(!L.length)h+='<p class="empty">'+(r?"No recipes yet. Add one, then brew it when you are ready.":"No batches yet. Start one, or brew a recipe from the Recipes tab.")+'</p>';
+L.slice().reverse().forEach(function(b){var c=r?calc(b):null,a=r?(c?c.abv.toFixed(1):null):abv(b),sub=r?(c?"OG "+c.og.toFixed(3)+" · "+Math.round(c.ibu)+" IBU":"")+(b.style?(c?" · ":"")+esc(b.style):""):esc(b.style)+(b.style?" · ":"")+esc(b.date)+" · "+b.log.length+" readings";
+h+='<button class="item" onclick="open_(\''+b.id+'\')">'+(a?'<em class="abv">'+a+'%</em>':'')+'<b>'+esc(b.name||"Untitled")+'</b><span>'+sub+'</span></button>'});
+return h}
+
+function add(){var b=norm({id:(tab==="r"?"r":"b")+Date.now(),name:"",style:"",vol:"",eff:72,recipe:""});
+if(tab==="b"){b.date=today();b.og="";b.fg="";b.notes=""}
+C().push(b);save();open_(b.id)}
+function open_(id){sel=id;render();window.scrollTo(0,0)}
+function brew(){var r=get(),b=JSON.parse(JSON.stringify(r));b.id="b"+Date.now();b.rid=r.id;b.date=today();b.og="";b.fg="";b.notes="";b.log=[];S.batches.push(b);save();tab="b";sel=b.id;render();window.scrollTo(0,0)}
+function restore(){try{var v=JSON.parse($("bk").value);if(Array.isArray(v))S={recipes:[],batches:v};else if(v&&v.batches)S={recipes:v.recipes||[],batches:v.batches,equip:v.equip||[],units:v.units};else throw 0;normAll();save();bk=false;render()}catch(e){alert("That text isn't valid backup data.")}}
+
+function field(k,l,t,full){var b=get();return'<div class="'+(full?'full':'')+'"><label>'+l+'<input type="'+(t||'text')+'" '+(t==='number'?'step="any" inputmode="decimal" ':'')+'value="'+esc(b[k])+'" onchange="upd(\''+k+'\',this.value)"></label></div>'}
+function area(k,l){var b=get();return'<div class="full"><label>'+l+'<textarea onchange="upd(\''+k+'\',this.value)">'+esc(b[k])+'</textarea></label></div>'}
+function upd(k,v){var b=get();b[k]=v;save();if($("abv"))refresh();if($("stats"))$("stats").innerHTML=stats(b)}
+function refresh(){var b=get(),a=abv(b);$("abv").textContent=a?a+"%":"–";$("chart").innerHTML=chart(b)}
+
+function tbl(k,hd,ks,rows,lbl){var h='<h2 style="font-size:1rem">'+lbl+'s</h2><div class="scroll"><table><tr>'+hd.map(function(x){return'<th>'+x+'</th>'}).join("")+'<th></th></tr>';
+rows.forEach(function(r,i){h+='<tr>'+ks.map(function(c){return'<td><input class="c" '+(c==="n"?'':'type="number" step="any" inputmode="decimal" ')+'value="'+(c==="mt"?tdisp(r[c]):UF[c]?dv(c,r[c]):esc(r[c]))+'" onchange="row(\''+k+'\','+i+',\''+c+'\','+(c==="mt"?"tsave(this.value)":UF[c]?"sv('"+c+"',this.value)":"this.value")+')"></td>'}).join("")+'<td><button class="del" onclick="rrm(\''+k+'\','+i+')" aria-label="Remove">✕</button></td></tr>'});
+return h+'</table></div><button class="ghost" style="margin:8px 0 4px" onclick="radd(\''+k+'\')">Add '+lbl.toLowerCase()+'</button>'}
+function row(k,i,c,v){var b=get();b[k][i][c]=v;save();$("stats").innerHTML=stats(b)}
+function rrm(k,i){get()[k].splice(i,1);save();render()}
+function radd(k){get()[k].push({ferm:{n:"",kg:"",ppg:37,lov:2},hops:{n:"",g:"",aa:"",min:60},yeast:{n:"",amt:"",att:75,temp:""},mash:{n:"Rest",mt:67,min:60}}[k]);save();render()}
+function presets(b){var t=b.mash.reduce(function(s,x){return s+num(x.min)},0);return'<div class="row" style="margin-bottom:8px"><span class="sub" style="margin:0">Total '+t+' min. Replace steps with:</span><button class="ghost" onclick="preset(1)">Single infusion</button><button class="ghost" onclick="preset(2)">Step mash</button></div>'}
+function preset(n){get().mash=n===1?[{n:"Saccharification",mt:67,min:60},{n:"Mash out",mt:76,min:10}]:[{n:"Protein rest",mt:52,min:15},{n:"Beta rest",mt:63,min:30},{n:"Alpha rest",mt:72,min:30},{n:"Mash out",mt:76,min:10}];save();render()}
+function eqOf(b){return S.equip.filter(function(e){return e.id===b.eqid})[0]}
+function eqsel(b){if(!S.equip.length)return'<p class="sub" style="margin:8px 0">Add an equipment profile on the Equipment tab to estimate water needs.</p>';
+return'<label style="margin-top:8px">Equipment profile<select onchange="useeq(this.value)"><option value="">None</option>'+S.equip.map(function(e){return'<option value="'+e.id+'"'+(e.id===b.eqid?' selected':'')+'>'+esc(e.n)+'</option>'}).join("")+'</select></label>'}
+function useeq(id){var b=get(),e=S.equip.filter(function(x){return x.id===id})[0];b.eqid=id;if(e){b.eff=e.eff}save();render()}
+function ef(i,k,l,t,u,full){var e=S.equip[i],v=u?dv(u,e[k]):esc(e[k]);return'<div class="'+(full?'full':'')+'"><label>'+l+'<input type="'+t+'" '+(t==="number"?'step="any" inputmode="decimal" ':'')+'value="'+v+'" onchange="eset('+i+',\''+k+'\','+(u?"sv('"+u+"',this.value)":"this.value")+')"></label></div>'}
+function eset(i,k,v){S.equip[i][k]=v;save()}
+function eadd(){S.equip.push({id:"e"+Date.now(),n:"My system",eff:72,boiloff:3,trub:1,dead:1});save();render()}
+function edel(i){if(confirm("Delete this profile?")){S.equip.splice(i,1);save();render()}}
+function equipView(){var u=ul("vol"),h=tabs()+'<h1>Equipment</h1><p class="sub">Your brewing system. Pick a profile in a recipe or batch to set its efficiency and to estimate water needs.</p><button onclick="eadd()">New profile</button>';
+if(!S.equip.length)h+='<p class="empty">No profiles yet. Add one to match your kettle and mash tun.</p>';
+S.equip.forEach(function(e,i){h+='<div class="big" style="border-left-color:var(--acc)"><div class="grid">'+ef(i,"n","Profile name","text",0,1)+ef(i,"eff","Mash efficiency %","number")+ef(i,"boiloff","Boil-off per hour ("+u+")","number","vol")+ef(i,"trub","Trub and kettle loss ("+u+")","number","vol")+ef(i,"dead","Mash tun dead space ("+u+")","number","vol")+'</div><button class="del" onclick="edel('+i+')">Delete profile</button></div>'});return h}
+function builder(b){return'<h2>Recipe</h2><div class="stats" id="stats">'+stats(b)+'</div><div class="grid">'+vfield()+field("boil","Boil time (min)","number")+field("eff","Mash efficiency %","number")+'</div>'+eqsel(b)
++tbl("ferm",["Name",ul("kg"),"PPG","Color °L"],["n","kg","ppg","lov"],b.ferm,"Fermentable")
++tbl("hops",["Name",ul("g"),"AA %","Min"],["n","g","aa","min"],b.hops,"Hop")
++tbl("yeast",["Strain","Amount","Atten. %","Temp"],["n","amt","att","temp"],b.yeast,"Yeast")+tbl("mash",["Step","Temp °"+(im()?"F":"C"),"Min"],["n","mt","min"],b.mash,"Mash step")+presets(b)
++'<div class="grid" style="margin-top:12px">'+area("recipe","Process notes")+'</div>'}
+
+function detail(){var b=get(),r=tab==="r";
+var h=tabs()+'<div class="row"><button class="ghost" onclick="sel=null;render()">All '+(r?"recipes":"batches")+'</button>'+(r?'<button onclick="brew()">Brew this recipe</button>':'')+'</div>';
+h+='<h1>'+esc(b.name||(r?"New recipe":"New batch"))+'</h1>';
+if(r)h+='<div class="grid">'+field("name","Recipe name","text",1)+field("style","Style","text",1)+'</div>'+builder(b);
+else{var a=abv(b);
+h+='<div class="big">Alcohol by volume<br><strong id="abv">'+(a?a+"%":"–")+'</strong></div>';
+h+='<div class="grid">'+field("name","Batch name","text",1)+field("style","Style")+field("date","Brew date","date")+field("og","Measured OG","number")+field("fg","Measured FG","number")+'</div>';
+h+='<h2>Fermentation log</h2><div id="chart">'+chart(b)+'</div><div class="scroll"><table><tr><th>Date</th><th>Gravity</th><th>Temp °'+(im()?"F":"C")+'</th><th>Note</th><th></th></tr>';
+b.log.forEach(function(x,i){h+='<tr><td>'+esc(x.d)+'</td><td>'+esc(x.g)+'</td><td>'+tdisp(x.t)+'</td><td>'+esc(x.n)+'</td><td><button class="del" onclick="rm('+i+')" aria-label="Delete reading">✕</button></td></tr>'});
+h+='</table></div><div class="grid" style="margin-top:12px"><div><label>Date<input id="ld" type="date" value="'+today()+'"></label></div><div><label>Gravity<input id="lg" type="number" step="any" inputmode="decimal" placeholder="1.040"></label></div><div><label>Temp °'+(im()?"F":"C")+'<input id="lt" type="number" step="any" inputmode="decimal"></label></div><div><label>Note<input id="ln"></label></div><div class="full"><button onclick="addlog()">Add reading</button></div></div>';
+h+=builder(b)+'<h2>Tasting and batch notes</h2><div class="grid">'+area("notes","Notes")+'</div>'}
+return h+'<div class="row" style="margin-top:28px"><button class="del" onclick="delb()">Delete '+(r?"recipe":"batch")+'</button></div>'}
+
+function addlog(){var b=get(),g=$("lg").value;if(!g&&!$("ln").value)return;b.log.push({d:$("ld").value,g:g,t:tsave($("lt").value),n:$("ln").value});b.log.sort(function(x,y){return x.d<y.d?-1:x.d>y.d?1:0});save();render()}
+function rm(i){get().log.splice(i,1);save();render()}
+function delb(){if(confirm("Delete this "+(tab==="r"?"recipe":"batch")+"?")){var id=sel,L=C().filter(function(x){return x.id!==id});if(tab==="r")S.recipes=L;else S.batches=L;sel=null;save();render()}}
+
+function chart(b){
+var p=[];if(parseFloat(b.og)>0&&b.date)p.push({d:b.date,g:parseFloat(b.og)});
+b.log.forEach(function(r){if(parseFloat(r.g)>0&&r.d)p.push({d:r.d,g:parseFloat(r.g)})});
+if(p.length<2)return'<p class="empty">Add an OG and at least one gravity reading to see the curve.</p>';
+var t0=new Date(p[0].d).getTime(),W=640,H=240,L=52,R=16,T=16,B=28;
+var xs=p.map(function(q){return(new Date(q.d).getTime()-t0)/864e5}),xm=Math.max.apply(0,xs)||1;
+var lo=Math.min.apply(0,p.map(function(q){return q.g})),hi=Math.max.apply(0,p.map(function(q){return q.g}));
+lo=Math.floor((lo-.002)*1000)/1000;hi=Math.ceil((hi+.002)*1000)/1000;
+function X(v){return L+v/xm*(W-L-R)}function Y(v){return T+(hi-v)/(hi-lo)*(H-T-B)}
+var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gravity over time">';
+for(var i=0;i<=4;i++){var v=lo+(hi-lo)*i/4,y=Y(v);s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end" font-size="12" fill="var(--mute)">'+v.toFixed(3)+'</text>'}
+s+='<text x="'+L+'" y="'+(H-8)+'" font-size="12" fill="var(--mute)">Day 0</text><text x="'+(W-R)+'" y="'+(H-8)+'" text-anchor="end" font-size="12" fill="var(--mute)">Day '+Math.round(xm)+'</text>';
+s+='<polyline fill="none" stroke="var(--acc)" stroke-width="3" points="'+p.map(function(q,i){return X(xs[i])+","+Y(q.g)}).join(" ")+'"/>';
+p.forEach(function(q,i){s+='<circle cx="'+X(xs[i])+'" cy="'+Y(q.g)+'" r="4" fill="var(--acc)"/>'});
+return s+'</svg>'}
+
+function render(){$("app").innerHTML=tab==="e"?equipView():sel&&get()?detail():(sel=null,list())}
+render();
+</script>
+</body>
+</html>
